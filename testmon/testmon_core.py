@@ -79,11 +79,14 @@ class SourceTree:
         self.cache: dict = {}
 
     def get_file(self, filename):
+        logger.debug("Getting file state for: %s", filename)
         if filename not in self.cache:
+            logger.debug("File not in cache, reading from disk: %s", filename)
             code, fsha = get_source_sha(directory=self.rootdir, filename=filename)
             if fsha:
                 try:
                     fs_mtime = os.path.getmtime(os.path.join(self.rootdir, filename))
+                    logger.debug("Got mtime %s for %s", fs_mtime, filename)
                     self.cache[filename] = Module(
                         source_code=code,
                         mtime=fs_mtime,
@@ -92,9 +95,12 @@ class SourceTree:
                         filename=filename,
                         rootdir=self.rootdir,
                     )
+                    logger.debug("Created module for %s with fsha %s", filename, fsha)
                 except FileNotFoundError:
+                    logger.debug("File not found: %s", filename)
                     self.cache[filename] = None
             else:
+                logger.debug("Could not get source SHA for %s", filename)
                 self.cache[filename] = None
         return self.cache[filename]
 
@@ -144,10 +150,13 @@ def should_include(cov, filename):
 
 
 def collect_mhashes(source_tree, new_changed_file_data):
+    logger.debug("Starting method hash collection for %d files", len(new_changed_file_data))
     files_mhashes = {}
     for filename in new_changed_file_data:
+        logger.debug("Processing file: %s", filename)
         module = source_tree.get_file(filename)
         files_mhashes[filename] = module.method_checksums if module else None
+        logger.debug("Method hashes for %s: %s", filename, files_mhashes[filename])
     return files_mhashes
 
 
@@ -280,21 +289,37 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
             database.delete_test_executions(to_delete, self.exec_id)
 
     def determine_stable(self, assert_old=True):
+        logger.debug("Starting test stability determination...")
         files_fshas = {}
         for filename in self.files_of_interest:
             module = self.source_tree.get_file(filename)
             if module:
                 files_fshas[filename] = module.fs_fsha
+                logger.debug("File %s has fs_fsha: %s", filename, module.fs_fsha)
 
         # Compare the fshas from disk to the fshas in the database and get files
         # where the fsha is not in database.
+        logger.debug("Fetching files with unknown fshas from database...")
         new_changed_file_data = self.db.fetch_unknown_files(files_fshas, self.exec_id)
+        if new_changed_file_data:
+            logger.debug("Found %d files with unknown fshas: %s",
+                       len(new_changed_file_data),
+                       [d.filename for d in new_changed_file_data])
 
         # Get the mhashes for the files from above
+        logger.debug("Collecting method hashes for changed files...")
         files_mhashes = collect_mhashes(self.source_tree, new_changed_file_data)
+        if files_mhashes:
+            logger.debug("Method hashes for changed files: %s", files_mhashes)
 
+        logger.debug("Determining affected tests...")
         tests = self.db.determine_tests(self.exec_id, files_mhashes)
         affected_tests, self.failing_tests = tests["affected"], tests["failing"]
+
+        if affected_tests:
+            logger.debug("Found %d affected tests: %s", len(affected_tests), affected_tests)
+        if self.failing_tests:
+            logger.debug("Found %d failing tests: %s", len(self.failing_tests), self.failing_tests)
 
         if assert_old:
             self.assert_old_determin_stable(affected_tests)

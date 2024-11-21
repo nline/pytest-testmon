@@ -7,7 +7,7 @@ from functools import lru_cache
 
 from testmon.process_code import blob_to_checksums, checksums_to_blob
 
-from testmon.common import TestExecutions
+from testmon.common import TestExecutions, get_logger
 
 
 DATA_VERSION = 13
@@ -15,6 +15,8 @@ DATA_VERSION = 13
 ChangedFileData = namedtuple(
     "ChangedFileData", "filename name method_checksums id failed"
 )
+
+logger = get_logger(__name__)
 
 
 class TestmonDbException(Exception):
@@ -40,9 +42,15 @@ def check_fingerprint_db(
     files_methods_checksums, file_name, fingerprint: ChangedFileData
 ):  # filename name method_checksums id failed
     if file_name in files_methods_checksums and files_methods_checksums[file_name]:
+        logger.debug("Checking fingerprint for file %s", file_name)
+        logger.debug("  Current method hashes: %s", files_methods_checksums[file_name])
+        logger.debug("  Stored fingerprint: %s", fingerprint)
+
         if set(fingerprint) - set(files_methods_checksums[file_name]):
+            logger.debug("Fingerprint mismatch in file %s - stored checksums not found in current method hashes", file_name)
             return False
         return True
+    logger.debug("File %s not found in files_methods_checksums or has no method hashes", file_name)
     return False
 
 
@@ -494,6 +502,7 @@ class DB:  # pylint: disable=too-many-public-methods
         con.execute("DELETE FROM changed_files_mhashes")
 
     def determine_tests(self, exec_id, files_mhashes):
+        logger.debug("Starting test determination for execution %s", exec_id)
         with self.con as con:
             if not self._readonly:
                 con.execute(
@@ -501,6 +510,7 @@ class DB:  # pylint: disable=too-many-public-methods
                     [exec_id],
                 )
             self.delete_filenames(con)
+            logger.debug("Inserting method hashes for files: %s", list(files_mhashes.keys()))
             con.executemany(
                 "INSERT INTO changed_files_mhashes VALUES (?, ?, ?)",
                 [
@@ -510,6 +520,7 @@ class DB:  # pylint: disable=too-many-public-methods
             )
 
             results = []
+            logger.debug("Querying for test executions affected by changed files...")
             for row in self.con.execute(
                 f"""
                 SELECT
@@ -535,12 +546,16 @@ class DB:  # pylint: disable=too-many-public-methods
                         blob_to_checksums(row["method_checksums"]),
                     ]
                 )
+                logger.debug("Found test execution: file=%s, test=%s", row["filename"], row["test_name"])
 
             method_misses = []
+            logger.debug("Checking fingerprints for %d test executions...", len(results))
             for result in results:
                 if not check_fingerprint_db(files_mhashes, result[0], result[2]):
                     method_misses.append(result[1])
+                    logger.debug("Test %s invalidated due to fingerprint mismatch in file %s", result[1], result[0])
 
+            logger.debug("Querying for failing tests...")
             failing_tests = [
                 row["test_name"]
                 for row in self.con.execute(
@@ -555,7 +570,10 @@ class DB:  # pylint: disable=too-many-public-methods
                     [exec_id],
                 )
             ]
+            if failing_tests:
+                logger.debug("Found failing tests: %s", failing_tests)
 
+            logger.debug("Found %d method misses and %d failing tests", len(method_misses), len(failing_tests))
             return {"affected": method_misses, "failing": failing_tests}
 
     def delete_test_executions(self, test_names, exec_id):

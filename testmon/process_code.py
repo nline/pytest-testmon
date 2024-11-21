@@ -10,8 +10,11 @@ from array import array
 from subprocess import run, CalledProcessError
 
 from coverage.phystokens import source_encoding
+from testmon.common import get_logger
 
 CHECKUMS_ARRAY_TYPE = "i"
+
+logger = get_logger(__name__)
 
 
 def to_signed(unsigned33):
@@ -190,15 +193,20 @@ class Module:
         if self._blocks is None:
             self._blocks = []
             lines = self.source_code.splitlines()
+            logger.debug("Processing %d lines in file %s", len(lines), self.filename)
             if self.ext == "py":
                 try:
                     tree = ast.parse(self.source_code, filename="<unknown>")
+                    logger.debug("Successfully parsed AST for %s", self.filename)
                     self.dump_and_block(tree, len(lines), name="<module>")
-                except SyntaxError:
+                    logger.debug("Generated %d blocks for %s", len(self._blocks), self.filename)
+                except SyntaxError as e:
+                    logger.debug("Syntax error in %s: %s", self.filename, str(e))
                     # We can continue without blocks because no tests depending on this file will ever get executed,
                     # so no node depending on this checksum and mtime will ever be written to db.
                     pass
             else:
+                logger.debug("Non-Python file %s: creating single block", self.filename)
                 self._blocks = [Block(1, len(lines), self.source_code)]
         return self._blocks
 

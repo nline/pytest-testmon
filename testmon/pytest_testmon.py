@@ -115,6 +115,12 @@ def pytest_addoption(parser):
         ),
     )
 
+    group.addoption(
+        "--testmon-debug",
+        action="store_true",
+        help="Enable debug logging for testmon"
+    )
+
     parser.addini("environment_expression", "environment expression", default="")
     parser.addini(
         "testmon_ignore_dependencies",
@@ -244,6 +250,10 @@ def pytest_configure(config):
             register_plugins(config, tm_conf.select, tm_conf.collect, cov_plugin)
         except TestmonException as error:
             pytest.exit(str(error))
+
+    if config.getoption("testmon_debug"):
+        import logging
+        logging.getLogger("testmon").setLevel(logging.DEBUG)
 
 
 def pytest_report_header(config):
