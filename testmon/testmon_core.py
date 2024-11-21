@@ -304,7 +304,7 @@ class TestmonData:  # pylint: disable=too-many-instance-attributes
         if new_changed_file_data:
             logger.debug("Found %d files with unknown fshas: %s",
                        len(new_changed_file_data),
-                       [d.filename for d in new_changed_file_data])
+                       new_changed_file_data)
 
         # Get the mhashes for the files from above
         logger.debug("Collecting method hashes for changed files...")
