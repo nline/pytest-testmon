@@ -2,33 +2,30 @@
 """
 Main module of testmon pytest plugin.
 """
+import os
 import time
 import xmlrpc.client
-import os
-
 from collections import defaultdict
 from datetime import date, timedelta
-
 from pathlib import Path
-import pytest
 
-from _pytest.config import ExitCode, Config
+import pytest
+from _pytest.config import Config, ExitCode
 from _pytest.terminal import TerminalReporter
 
-from testmon.configure import TmConf
-
-from testmon.testmon_core import (
-    TestmonCollector,
-    eval_environment,
-    TestmonData,
-    home_file,
-    TestmonException,
-    get_test_execution_class_name,
-    get_test_execution_module_name,
-    cached_relpath,
-)
 from testmon import configure
 from testmon.common import get_logger, get_system_packages
+from testmon.configure import TmConf
+from testmon.testmon_core import (
+    TestmonCollector,
+    TestmonData,
+    TestmonException,
+    cached_relpath,
+    eval_environment,
+    get_test_execution_class_name,
+    get_test_execution_module_name,
+    home_file,
+)
 
 SURVEY_NOTIFICATION_INTERVAL = timedelta(days=28)
 
@@ -116,9 +113,7 @@ def pytest_addoption(parser):
     )
 
     group.addoption(
-        "--testmon-debug",
-        action="store_true",
-        help="Enable debug logging for testmon"
+        "--testmon-debug", action="store_true", help="Enable debug logging for testmon"
     )
 
     parser.addini("environment_expression", "environment expression", default="")
@@ -226,10 +221,16 @@ def register_plugins(config, should_select, should_collect, cov_plugin):
 
 
 def pytest_configure(config):
+    if config.getoption("testmon_debug"):
+        import logging
+
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger("testmon").setLevel(logging.DEBUG)
+
     coverage_stack = None
     try:
-        from tmnet.testmon_core import (  # pylint: disable=import-outside-toplevel
-            Testmon as UberTestmon,
+        from tmnet.testmon_core import (
+            Testmon as UberTestmon,  # pylint: disable=import-outside-toplevel
         )
 
         coverage_stack = UberTestmon.coverage_stack
@@ -250,10 +251,6 @@ def pytest_configure(config):
             register_plugins(config, tm_conf.select, tm_conf.collect, cov_plugin)
         except TestmonException as error:
             pytest.exit(str(error))
-
-    if config.getoption("testmon_debug"):
-        import logging
-        logging.getLogger("testmon").setLevel(logging.DEBUG)
 
 
 def pytest_report_header(config):

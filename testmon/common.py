@@ -62,21 +62,25 @@ def dummy():
 
 
 def get_logger(name):
-    formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-    handler = logging.StreamHandler()
-    handler.setFormatter(formatter)
+    logger = logging.getLogger(name)
 
-    # Configure the logger
-    tm_logger = logging.getLogger(name)
+    # Create formatter
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
-    # Make sure debug messages can propagate
-    tm_logger.propagate = True
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
 
-    # Don't set a default level - let it inherit from root
-    if not tm_logger.handlers:
-        tm_logger.addHandler(handler)
+    # Only add handler if it doesn't exist
+    if not logger.handlers:
+        logger.addHandler(console_handler)
 
-    return tm_logger
+    # Make sure we propagate to root logger
+    logger.propagate = True
+
+    return logger
 
 
 logger = get_logger(__name__)
