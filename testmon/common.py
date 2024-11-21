@@ -24,8 +24,7 @@ except ImportError:
 
 
 from pathlib import Path
-
-from typing import TypedDict, List, Dict
+from typing import Dict, List, TypedDict
 
 
 class FileFp(TypedDict):
@@ -63,14 +62,20 @@ def dummy():
 
 
 def get_logger(name):
-    formatter = logging.Formatter("%(levelname)s: %(message)s")
+    formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
     # Configure the logger
     tm_logger = logging.getLogger(name)
-    tm_logger.setLevel(logging.INFO)
-    tm_logger.addHandler(handler)
+
+    # Make sure debug messages can propagate
+    tm_logger.propagate = True
+
+    # Don't set a default level - let it inherit from root
+    if not tm_logger.handlers:
+        tm_logger.addHandler(handler)
+
     return tm_logger
 
 
