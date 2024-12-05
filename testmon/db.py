@@ -724,6 +724,7 @@ class DB:  # pylint: disable=too-many-public-methods
         exec_id, packages_changed = self.fetch_or_create_environment(
             environment_name, system_packages, python_version
         )
+        packages_changed = False
         return {
             "exec_id": exec_id,
             "filenames": self.all_filenames(),
