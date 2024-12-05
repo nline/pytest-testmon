@@ -686,6 +686,9 @@ class DB:  # pylint: disable=too-many-public-methods
                 )
             else:
                 packages_changed = False
+
+            # Override
+            packages_changed = False
             if not environment or packages_changed:
                 try:
                     cursor.execute(
@@ -724,6 +727,7 @@ class DB:  # pylint: disable=too-many-public-methods
         exec_id, packages_changed = self.fetch_or_create_environment(
             environment_name, system_packages, python_version
         )
+        # Override
         packages_changed = False
         return {
             "exec_id": exec_id,
